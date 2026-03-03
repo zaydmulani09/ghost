@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ghost</title>
+<link rel="manifest" href="data:application/manifest+json,{
+  %22name%22:%22ghost%22,
+  %22short_name%22:%22ghost%22,
+  %22description%22:%22A%20local%20LLM%20that%20runs%20entirely%20in%20your%20browser%22,
+  %22start_url%22:%22.%2Fghost.html%22,
+  %22display%22:%22standalone%22,
+  %22background_color%22:%22%230a0a0a%22,
+  %22theme_color%22:%22%230a0a0a%22,
+  %22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20100%20100'%3E%3Crect%20width%3D'100'%20height%3D'100'%20fill%3D'%230a0a0a'%2F%3E%3Ctext%20y%3D'.9em'%20font-size%3D'80'%3E%F0%9F%91%BB%3C%2Ftext%3E%3C%2Fsvg%3E%22,%22sizes%22:%22any%22,%22type%22:%22image/svg+xml%22}]
+}">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="ghost">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Reset body for chat mode */
+  body {
+    margin: 0;
+    padding: 0;
+    background: #0a0a0a;
+    color: #f0f0f0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  body.chat-mode {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    text-align: center;
+    padding: 2rem;
+  }
+
+  body.chat-mode #app {
+    display: contents;
+    padding: 0;
+    height: auto;
+  }
+
+  #title {
+    font-size: 2.5rem;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    margin-bottom: 0.4rem;
+    color: #f0f0f0;
+  }
+
+  #subtitle {
+    font-size: 0.85rem;
+    color: #3a3a3a;
+    margin-bottom: 2rem;
+    letter-spacing: 0.02em;
+  }
+
+  #status {
+    font-size: 0.8rem;
+    color: #555;
+    letter-spacing: 0.03em;
+  }
+
+  #cancel-btn {
+    margin-top: 1.5rem;
+    background: none;
+    border: none;
+    color: #2a2a2a;
+    font-size: 0.78rem;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 0.02em;
+    transition: color 0.15s;
+  }
+
+  #cancel-btn:hover {
+    color: #666;
+  }
+
+  #model-picker {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  #model-picker.visible {
+    display: flex;
+  }
+
+  #model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 400px;
+    margin: 1.5rem 0;
+  }
+
+  .model-card {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .model-card:hover {
+    border-color: #333;
+    background: #161616;
+  }
+
+  .model-card-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #f0f0f0;
+    margin-bottom: 0.25rem;
+  }
+
+  .model-card-desc {
+    font-size: 0.75rem;
+    color: #444;
+  }
+
+  #picker-note {
+    font-size: 0.72rem;
+    color: #2a2a2a;
+    max-width: 300px;
+  }
+
+  #chat-ui {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    max-width: 720px;
+    height: 100vh;
+    margin: 0 auto;
+  }
+
+  #chat-ui.visible {
+    display: flex;
+  }
+
+  #chat-header {
+    padding: 1rem 1rem 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    border-bottom: 1px solid #111;
+    padding-bottom: 0.75rem;
+  }
+
+  #chat-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #f0f0f0;
+    letter-spacing: -0.02em;
+  }
+
+  #chat-model {
+    font-size: 0.72rem;
+    color: #333;
+    letter-spacing: 0.02em;
+  }
+
+  #change-model-btn {
+    margin-left: auto;
+    background: none;
+    border: 1px solid #1e1e1e;
+    border-radius: 6px;
+    color: #333;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  #change-model-btn:hover {
+    color: #888;
+    border-color: #333;
+  }
+
+  #install-btn {
+    background: none;
+    border: 1px solid #1e1e1e;
+    border-radius: 6px;
+    color: #333;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.15s, border-color 0.15s;
+    margin-left: 0.5rem;
+  }
+
+  #install-btn:hover {
+    color: #888;
+    border-color: #333;
+  }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem 1rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    scrollbar-width: thin;
+    scrollbar-color: #222 transparent;
+    text-align: left;
+  }
+
+  #messages::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  #messages::-webkit-scrollbar-thumb {
+    background: #222;
+    border-radius: 2px;
+  }
+
+  .message {
+    max-width: 80%;
+    padding: 0.7rem 1rem;
+    border-radius: 14px;
+    font-size: 0.925rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+    animation: fadeIn 0.15s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.user {
+    align-self: flex-end;
+    background: #1c1c1c;
+    color: #f0f0f0;
+    border: 1px solid #2a2a2a;
+    border-bottom-right-radius: 4px;
+  }
+
+  .message.assistant {
+    align-self: flex-start;
+    background: transparent;
+    color: #c8c8c8;
+    padding-left: 0;
+    max-width: 90%;
+    text-align: left;
+  }
+
+  .message.assistant.streaming::after {
+    content: '▋';
+    animation: blink 0.8s step-end infinite;
+    color: #444;
+    margin-left: 1px;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .message.assistant pre {
+    background: #0d0d0d;
+    border: 1px solid #1e1e1e;
+    border-radius: 8px;
+    padding: 0.875rem 1rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+    font-size: 0.8rem;
+  }
+
+  .message.assistant code {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.82rem;
+    background: #111;
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+    color: #d4d4d4;
+  }
+
+  .message.assistant pre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    color: #c8c8c8;
+  }
+
+  .message.assistant h1,
+  .message.assistant h2,
+  .message.assistant h3 {
+    color: #f0f0f0;
+    margin: 0.75rem 0 0.25rem;
+    font-weight: 600;
+  }
+
+  .message.assistant h1 { font-size: 1.1rem; }
+  .message.assistant h2 { font-size: 1rem; }
+  .message.assistant h3 { font-size: 0.9rem; }
+
+  .message.assistant ul,
+  .message.assistant ol {
+    padding-left: 1.25rem;
+    margin: 0.4rem 0;
+  }
+
+  .message.assistant li {
+    margin: 0.2rem 0;
+    color: #c8c8c8;
+  }
+
+  .message.assistant p {
+    margin: 0.35rem 0;
+  }
+
+  .message.assistant strong { color: #e8e8e8; }
+  .message.assistant em { color: #aaa; }
+
+  .copy-btn {
+    display: block;
+    margin-top: 0.5rem;
+    background: none;
+    border: none;
+    color: #2a2a2a;
+    font-size: 0.7rem;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+    letter-spacing: 0.03em;
+    transition: color 0.15s;
+  }
+
+  .copy-btn:hover {
+    color: #666;
+  }
+
+  #empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  #empty-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    letter-spacing: -0.03em;
+    margin-bottom: 0.4rem;
+  }
+
+  #empty-subtitle {
+    font-size: 0.75rem;
+    color: #222;
+    letter-spacing: 0.02em;
+  }
+
+  #input-bar {
+    padding: 0.875rem 1rem;
+    border-top: 1px solid #161616;
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+    background: #0a0a0a;
+  }
+
+  #user-input {
+    flex: 1;
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    color: #f0f0f0;
+    padding: 0.6rem 0.875rem;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    max-height: 140px;
+    overflow-y: auto;
+    line-height: 1.5;
+    transition: border-color 0.15s ease;
+  }
+
+  #user-input:focus {
+    border-color: #333;
+  }
+
+  #user-input::placeholder {
+    color: #333;
+  }
+
+  #send-btn, #stop-btn {
+    background: #f0f0f0;
+    color: #0a0a0a;
+    border: none;
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+    transition: opacity 0.15s ease;
+  }
+
+  #send-btn:hover { opacity: 0.85; }
+  #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  #stop-btn {
+    background: #1e1e1e;
+    color: #888;
+    border: 1px solid #2a2a2a;
+  }
+
+  #stop-btn:hover { color: #f0f0f0; }
+
+  #token-count {
+    font-size: 0.68rem;
+    color: #2a2a2a;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s;
+    align-self: center;
+  }
+
+  /* Mic button gracefully degrades: if hidden (unsupported browser),
+     #input-bar still looks correct since this is just a flex item */
+  #mic-btn {
+    background: none;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    color: #333;
+    padding: 0.6rem 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    flex-shrink: 0;
+  }
+
+  #mic-btn:hover {
+    color: #888;
+    border-color: #333;
+  }
+
+  #mic-btn.recording {
+    color: #ff4444;
+    border-color: #ff4444;
+    background: rgba(255, 68, 68, 0.08);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  #doc-indicator {
+    font-size: 0.72rem;
+    color: #444;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  #clear-doc-btn {
+    background: none;
+    border: none;
+    color: #333;
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    transition: color 0.15s;
+  }
+
+  #clear-doc-btn:hover { color: #888; }
+
+  #drag-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 10, 10, 0.92);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed #222;
+  }
+
+  #drag-overlay.active {
+    display: flex;
+  }
+
+  #drag-inner {
+    text-align: center;
+    pointer-events: none;
+  }
+
+  #drag-title {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #f0f0f0;
+    margin-bottom: 0.4rem;
+  }
+
+  #drag-sub {
+    font-size: 0.78rem;
+    color: #444;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="model-picker">
+    <h1 id="picker-title">ghost</h1>
+    <p id="picker-subtitle">choose a model to get started</p>
+    <div id="model-list"></div>
+    <p id="picker-note">model downloads once, works offline forever after</p>
+  </div>
+  <h1 id="title">ghost</h1>
+  <p id="subtitle">a local AI that lives in your browser</p>
+  <p id="status">Initializing...</p>
+  <button id="cancel-btn" style="display:none">← back</button>
+  <div id="chat-ui">
+    <div id="chat-header">
+      <span id="chat-title">ghost</span>
+      <span id="chat-model">tinyllama · local</span>
+      <span id="doc-indicator" style="display:none"></span>
+      <button id="clear-doc-btn" style="display:none">✕</button>
+      <button id="change-model-btn">change</button>
+      <button id="install-btn" style="display:none">install app</button>
+    </div>
+    <div id="messages">
+      <div id="empty-state">
+        <p id="empty-title">ghost</p>
+        <p id="empty-subtitle">running locally · no data leaves your device</p>
+      </div>
+    </div>
+    <div id="input-bar">
+      <textarea id="user-input" placeholder="Message ghost..." rows="1"></textarea>
+      <span id="token-count"></span>
+      <button id="mic-btn" title="Voice input">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
+      <button id="send-btn">Send</button>
+      <button id="stop-btn" style="display:none">Stop</button>
+    </div>
+  </div>
+</div>
+<div id="drag-overlay">
+  <div id="drag-inner">
+    <p id="drag-title">drop a document</p>
+    <p id="drag-sub">.txt or .pdf · stays on your device</p>
+  </div>
+</div>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js', { scope: './' })
+    .then(reg => console.log('SW registered:', reg.scope))
+    .catch(err => console.log('SW failed:', err));
+}
+
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  document.getElementById('install-btn').style.display = 'inline-block';
+});
+
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  console.log('Install outcome:', outcome);
+  deferredInstallPrompt = null;
+  document.getElementById('install-btn').style.display = 'none';
+});
+
+window.addEventListener('appinstalled', () => {
+  console.log('ghost installed as PWA');
+  document.getElementById('install-btn').style.display = 'none';
+});
+</script>
+<script type="module">
+  // Pin exact version so JS and WASM always match
+  const WLLAMA_VERSION = '2.3.7';
+  const BASE = `https://cdn.jsdelivr.net/npm/@wllama/wllama@${WLLAMA_VERSION}/esm`;
+
+  // Import the main wllama module
+  const { Wllama } = await import(`${BASE}/index.js`);
+
+  // CONFIG: v2 only needs .wasm files, .js files no longer required
+  const CONFIG = {
+    'single-thread/wllama.wasm': `${BASE}/single-thread/wllama.wasm`,
+    'multi-thread/wllama.wasm': `${BASE}/multi-thread/wllama.wasm`,
+  };
+
+  const MODELS = [
+    {
+      id: 'qwen2.5-1.5b',
+      label: 'Qwen2.5 1.5B',
+      description: 'Recommended · 1.1 GB · smart and fast',
+      repo: 'Qwen/Qwen2.5-1.5B-Instruct-GGUF',
+      file: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
+      template: 'chatml',
+    },
+    {
+      id: 'qwen2-0.5b',
+      label: 'Qwen2 0.5B',
+      description: 'Fastest · 400 MB · instant responses',
+      repo: 'Qwen/Qwen2-0.5B-Instruct-GGUF',
+      file: 'qwen2-0_5b-instruct-q4_k_m.gguf',
+      template: 'chatml',
+    },
+    {
+      id: 'tinyllama',
+      label: 'TinyLlama 1.1B',
+      description: 'Lightweight · 670 MB · good for low-RAM devices',
+      repo: 'TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF',
+      file: 'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+      template: 'chatml',
+    },
+  ];
+
+  const SYSTEM_PROMPT = `You are ghost, a helpful AI assistant. Give short, direct answers. Never explain that you are an AI unless asked. Never write welcome messages or introductions.`;
+
+  // ---------- Chat UI ----------
+
+  const wllama = new Wllama(CONFIG);
+  let conversationHistory = [];
+  let isGenerating = false;
+
+  function renderMarkdown(text) {
+    // Escape HTML first to prevent XSS
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Code blocks (``` ... ```) — do before inline code
+    html = html.replace(/```[\w]*\n?([\s\S]*?)```/g,
+      '<pre><code>$1</code></pre>');
+
+    // Inline code
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Bold
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // Italic
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // Headers
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // Numbered lists
+    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ol>$&</ol>');
+
+    // Bullet lists
+    html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+    // Line breaks — double newline = paragraph break
+    html = html.replace(/\n\n/g, '</p><p>');
+    html = html.replace(/\n/g, '<br>');
+    html = '<p>' + html + '</p>';
+
+    // Clean up empty paragraphs
+    html = html.replace(/<p><\/p>/g, '');
+    html = html.replace(/<p>(<(?:pre|ul|ol|h[1-3])>)/g, '$1');
+    html = html.replace(/(<\/(?:pre|ul|ol|h[1-3])>)<\/p>/g, '$1');
+
+    return html;
+  }
+
+  function addCopyButton(div, text) {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'copy';
+    btn.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = 'copied';
+      setTimeout(() => btn.textContent = 'copy', 2000);
+    });
+    div.appendChild(btn);
+  }
+
+  function estimateTokens(text) {
+    // Rough estimate: 1 token ≈ 4 chars
+    return Math.ceil(text.length / 4);
+  }
+
+  function buildPromptFromHistory(history, systemPrompt, template) {
+    if (template === 'phi3') {
+      let prompt = `<|system|>\n${systemPrompt}<|end|>\n`;
+      history.forEach(turn => {
+        if (turn.role === 'user') prompt += `<|user|>\n${turn.content}<|end|>\n<|assistant|>\n`;
+        else prompt += `${turn.content}<|end|>\n`;
+      });
+      return prompt;
+    }
+    // ChatML
+    let prompt = `<|im_start|>system\n${systemPrompt}<|im_end|>\n`;
+    history.forEach(turn => {
+      if (turn.role === 'user') {
+        prompt += `<|im_start|>user\n${turn.content}<|im_end|>\n<|im_start|>assistant\n`;
+      } else {
+        prompt += `${turn.content}<|im_end|>\n`;
+      }
+    });
+    return prompt;
+  }
+
+  // ---------- RAG: document ingestion + embedding ----------
+
+  let vectorStore = []; // { text, embedding }[]
+  let activeDocument = null; // { name, chunks }
+
+  async function extractText(file) {
+    if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      return await file.text();
+    }
+
+    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      // Use PDF.js from CDN to extract text
+      const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.mjs');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.mjs';
+
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(item => item.str).join(' ') + '\n';
+      }
+      return text;
+    }
+
+    throw new Error('Unsupported file type. Please drop a .txt or .pdf file.');
+  }
+
+  function chunkText(text, chunkSize = 400, overlap = 50) {
+    const words = text.split(/\s+/).filter(w => w.length > 0);
+    const chunks = [];
+    let i = 0;
+    while (i < words.length) {
+      const chunk = words.slice(i, i + chunkSize).join(' ');
+      chunks.push(chunk);
+      i += chunkSize - overlap;
+    }
+    return chunks;
+  }
+
+  // wllama requires switching into embeddings mode before createEmbedding()
+  // (and back out before any chat completion — decode() throws if left on)
+  async function embedChunks(chunks, onProgress) {
+    vectorStore = [];
+    await wllama.setOptions({ embeddings: true });
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        const embedding = await wllama.createEmbedding(chunks[i]);
+        vectorStore.push({ text: chunks[i], embedding });
+        onProgress(i + 1, chunks.length);
+      }
+    } finally {
+      await wllama.setOptions({ embeddings: false });
+    }
+  }
+
+  function cosineSimilarity(a, b) {
+    let dot = 0, normA = 0, normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  async function retrieveRelevantChunks(query, topK = 3) {
+    if (vectorStore.length === 0) return [];
+    await wllama.setOptions({ embeddings: true });
+    let queryEmbedding;
+    try {
+      queryEmbedding = await wllama.createEmbedding(query);
+    } finally {
+      await wllama.setOptions({ embeddings: false });
+    }
+    const scored = vectorStore.map(item => ({
+      text: item.text,
+      score: cosineSimilarity(queryEmbedding, item.embedding),
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, topK).map(item => item.text);
+  }
+
+  async function handleDocumentDrop(file) {
+    const statusMsg = addMessage('assistant', `Reading ${file.name}...`);
+
+    try {
+      const text = await extractText(file);
+      const chunks = chunkText(text);
+
+      statusMsg.textContent = `Embedding ${chunks.length} chunks from ${file.name}...`;
+
+      await embedChunks(chunks, (done, total) => {
+        statusMsg.textContent = `Embedding ${file.name} — ${done}/${total} chunks`;
+      });
+
+      activeDocument = { name: file.name, chunks };
+
+      statusMsg.innerHTML = renderMarkdown(
+        `**${file.name}** loaded — ${chunks.length} chunks indexed. Ask me anything about it.`
+      );
+
+      // Show document indicator in header
+      document.getElementById('doc-indicator').textContent = `📄 ${file.name}`;
+      document.getElementById('doc-indicator').style.display = 'inline';
+      document.getElementById('clear-doc-btn').style.display = 'inline';
+
+    } catch (e) {
+      statusMsg.textContent = `Error loading document: ${e.message}`;
+    }
+  }
+
+  function renderModelPicker(onSelect) {
+    const list = document.getElementById('model-list');
+    list.innerHTML = '';
+    MODELS.forEach(model => {
+      const card = document.createElement('div');
+      card.className = 'model-card';
+      card.innerHTML = `
+        <div class="model-card-name">${model.label}</div>
+        <div class="model-card-desc">${model.description}</div>
+      `;
+      card.addEventListener('click', () => onSelect(model));
+      list.appendChild(card);
+    });
+  }
+
+  function addMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = `message ${role}`;
+    if (role === 'assistant') {
+      div.innerHTML = renderMarkdown(text);
+    } else {
+      div.textContent = text;
+    }
+    document.getElementById('messages').appendChild(div);
+    scrollToBottom();
+    return div;
+  }
+
+  function scrollToBottom() {
+    const messages = document.getElementById('messages');
+    const distFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
+    if (distFromBottom < 120) {
+      messages.scrollTop = messages.scrollHeight;
+    }
+  }
+
+  async function runInference(userText) {
+    const emptyState = document.getElementById('empty-state');
+    if (emptyState) emptyState.style.display = 'none';
+
+    addMessage('user', userText);
+    const assistantDiv = addMessage('assistant', '');
+    assistantDiv.classList.add('streaming');
+
+    const sendBtn = document.getElementById('send-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    sendBtn.disabled = true;
+    stopBtn.style.display = 'inline-block';
+
+    conversationHistory.push({ role: 'user', content: userText });
+
+    // Retrieve relevant chunks if a document is loaded
+    let ragContext = '';
+    if (vectorStore.length > 0) {
+      const chunks = await retrieveRelevantChunks(userText);
+      if (chunks.length > 0) {
+        ragContext = `\n\nRelevant context from document:\n${chunks.join('\n\n')}`;
+      }
+    }
+
+    const systemWithContext = SYSTEM_PROMPT + ragContext;
+    const template = window.activeModel?.template || 'chatml';
+    const prompt = buildPromptFromHistory(conversationHistory, systemWithContext, template);
+
+    let fullText = '';
+    const abortController = { abort: false };
+
+    stopBtn.onclick = () => {
+      abortController.abort = true;
+    };
+
+    try {
+      await wllama.createCompletion(prompt, {
+        nPredict: 256,
+        sampling: { temp: 0.7, top_p: 0.9 },
+        onNewToken: (token, piece, currentText) => {
+          if (abortController.abort) return false;
+          fullText = currentText;
+          assistantDiv.textContent = currentText;
+          scrollToBottom();
+        },
+      });
+    } finally {
+      assistantDiv.innerHTML = renderMarkdown(fullText);
+      assistantDiv.classList.remove('streaming');
+      addCopyButton(assistantDiv, fullText);
+      sendBtn.disabled = false;
+      stopBtn.style.display = 'none';
+
+      conversationHistory.push({ role: 'assistant', content: fullText });
+      if (conversationHistory.length > 10) {
+        conversationHistory = conversationHistory.slice(-10);
+      }
+    }
+  }
+
+  function initVoiceInput(handleSend) {
+    const micBtn = document.getElementById('mic-btn');
+    const input = document.getElementById('user-input');
+
+    // Check browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      micBtn.style.display = 'none';
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    let isRecording = false;
+    let finalTranscript = '';
+
+    recognition.onstart = () => {
+      isRecording = true;
+      finalTranscript = '';
+      micBtn.classList.add('recording');
+      micBtn.title = 'Listening... click to stop';
+    };
+
+    recognition.onresult = (e) => {
+      let interim = '';
+      finalTranscript = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          finalTranscript += e.results[i][0].transcript;
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+      // Show interim results in input as user speaks
+      input.value = finalTranscript || interim;
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+    };
+
+    recognition.onerror = (e) => {
+      console.error('Speech recognition error:', e.error);
+      if (e.error === 'not-allowed') {
+        micBtn.title = 'Microphone access denied';
+        micBtn.style.opacity = '0.3';
+      }
+      isRecording = false;
+      micBtn.classList.remove('recording');
+      micBtn.title = 'Voice input';
+    };
+
+    recognition.onend = () => {
+      isRecording = false;
+      micBtn.classList.remove('recording');
+      micBtn.title = 'Voice input';
+      // Auto-send if we got a final transcript
+      if (finalTranscript.trim()) {
+        handleSend();
+      }
+    };
+
+    micBtn.addEventListener('click', () => {
+      if (isRecording) {
+        recognition.stop();
+      } else {
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error('Recognition start error:', e);
+        }
+      }
+    });
+  }
+
+  function wireChatControls() {
+    const sendBtn = document.getElementById('send-btn');
+    const input = document.getElementById('user-input');
+
+    async function handleSend() {
+      const text = input.value.trim();
+      if (!text || isGenerating) return;
+      input.value = '';
+      input.style.height = 'auto';
+      isGenerating = true;
+      await runInference(text);
+      isGenerating = false;
+    }
+
+    sendBtn.addEventListener('click', handleSend);
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    });
+
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+      const tokens = estimateTokens(input.value);
+      const counter = document.getElementById('token-count');
+      if (tokens > 0) {
+        counter.textContent = `~${tokens}`;
+        counter.style.opacity = '1';
+      } else {
+        counter.style.opacity = '0';
+      }
+    });
+
+    window.addEventListener('dragover', e => {
+      e.preventDefault();
+      document.getElementById('drag-overlay').classList.add('active');
+    });
+
+    window.addEventListener('dragleave', e => {
+      if (e.relatedTarget === null) {
+        document.getElementById('drag-overlay').classList.remove('active');
+      }
+    });
+
+    window.addEventListener('drop', e => {
+      e.preventDefault();
+      document.getElementById('drag-overlay').classList.remove('active');
+      const file = e.dataTransfer.files[0];
+      if (file) handleDocumentDrop(file);
+    });
+
+    document.getElementById('doc-indicator').addEventListener('click', () => {
+      document.getElementById('clear-doc-btn').style.display = 'inline';
+    });
+
+    document.getElementById('clear-doc-btn').addEventListener('click', () => {
+      vectorStore = [];
+      activeDocument = null;
+      document.getElementById('doc-indicator').style.display = 'none';
+      document.getElementById('clear-doc-btn').style.display = 'none';
+    });
+
+    initVoiceInput(handleSend);
+  }
+
+  // ---------- Main flow ----------
+
+  async function loadModel(model) {
+    const status = document.getElementById('status');
+    document.getElementById('title').style.display = 'block';
+    document.getElementById('subtitle').style.display = 'block';
+    status.style.display = 'block';
+    document.getElementById('cancel-btn').style.display = 'block';
+
+    try {
+      status.textContent = `Downloading ${model.label}...`;
+      await wllama.loadModelFromHF(model.repo, model.file, {
+        useCache: true,
+        n_ctx: 2048,
+        n_threads: 1,
+        progressCallback: ({ loaded, total }) => {
+          if (total === 0) return;
+          const pct = Math.round((loaded / total) * 100);
+          const mb = (loaded / 1e6).toFixed(0);
+          const totalMb = (total / 1e6).toFixed(0);
+          status.textContent = `Downloading ${model.label} — ${pct}% (${mb} MB / ${totalMb} MB)`;
+        },
+      });
+
+      // Update header to show active model
+      document.getElementById('chat-model').textContent = `${model.label.toLowerCase()} · local`;
+
+      // Update chat template for this model
+      window.activeModel = model;
+
+      // Show chat UI
+      document.getElementById('title').style.display = 'none';
+      document.getElementById('subtitle').style.display = 'none';
+      status.style.display = 'none';
+      document.getElementById('cancel-btn').style.display = 'none';
+      document.getElementById('chat-ui').classList.add('visible');
+      document.body.classList.add('chat-mode');
+
+      wireChatControls();
+    } catch (e) {
+      status.textContent = `Error: ${e.message}`;
+      console.error(e);
+    }
+  }
+
+  async function main() {
+    // Clear stale model IDs from old model list
+    const validIds = MODELS.map(m => m.id);
+    const saved = localStorage.getItem('ghost-model');
+    if (saved && !validIds.includes(saved)) {
+      localStorage.removeItem('ghost-model');
+    }
+
+    // Check if user has a saved model preference
+    const savedModelId = localStorage.getItem('ghost-model');
+    const savedModel = MODELS.find(m => m.id === savedModelId);
+
+    if (savedModel) {
+      // Skip picker, go straight to loading
+      await loadModel(savedModel);
+    } else {
+      // Show model picker
+      document.getElementById('title').style.display = 'none';
+      document.getElementById('subtitle').style.display = 'none';
+      document.getElementById('status').style.display = 'none';
+      document.getElementById('model-picker').classList.add('visible');
+      renderModelPicker(async (model) => {
+        localStorage.setItem('ghost-model', model.id);
+        document.getElementById('model-picker').classList.remove('visible');
+        await loadModel(model);
+      });
+    }
+
+    document.getElementById('cancel-btn').addEventListener('click', () => {
+      // Can't cancel the fetch itself but we can reset UI
+      localStorage.removeItem('ghost-model');
+      location.reload();
+    });
+
+    document.getElementById('change-model-btn').addEventListener('click', () => {
+      // Clear saved model
+      localStorage.removeItem('ghost-model');
+      // Reset conversation memory and RAG state for the new model
+      conversationHistory = [];
+      vectorStore = [];
+      activeDocument = null;
+      document.getElementById('doc-indicator').style.display = 'none';
+      document.getElementById('clear-doc-btn').style.display = 'none';
+      // Exit wllama
+      wllama.exit().then(() => {
+        // Reset UI
+        document.getElementById('chat-ui').classList.remove('visible');
+        document.body.classList.remove('chat-mode');
+        document.getElementById('title').style.display = 'none';
+        document.getElementById('subtitle').style.display = 'none';
+        document.getElementById('model-picker').classList.add('visible');
+        // Clear old messages and restore the empty state for the next model
+        document.getElementById('messages').innerHTML = `
+          <div id="empty-state">
+            <p id="empty-title">ghost</p>
+            <p id="empty-subtitle">running locally · no data leaves your device</p>
+          </div>
+        `;
+        // Re-render picker
+        renderModelPicker(async (model) => {
+          localStorage.setItem('ghost-model', model.id);
+          document.getElementById('model-picker').classList.remove('visible');
+          await loadModel(model);
+        });
+      });
+    });
+  }
+
+  main();
+</script>
+</body>
+</html>
