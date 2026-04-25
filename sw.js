@@ -29,3 +29,4 @@ self.addEventListener('fetch', e => {
   }
   // Everything else: no SW involvement
 });
+
