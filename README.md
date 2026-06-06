@@ -59,4 +59,3 @@ Requires Node.js. The server sends COOP/COEP headers required for multi-thread W
 ## license
 
 MIT
-
