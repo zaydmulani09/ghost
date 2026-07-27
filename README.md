@@ -2,7 +2,7 @@
 
 > A local AI that runs entirely in your browser. No install. No API key. No GPU. No data leaves your device.
 
-![ghost model picker](https://raw.githubusercontent.com/zaydmulani09/ghost/main/screenshot.png)
+![ghost model picker](https://raw.githubusercontent.com/zaydmulani09/ghost/master/screenshot.png)
 
 ## try it
 
